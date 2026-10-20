@@ -1,0 +1,19 @@
+// Merge these entries; preserve existing plugin paths, allowlists, and entries.
+{
+  plugins: {
+    load: {
+      paths: ["/absolute/path/to/openclaw-workshop-governance"]
+    },
+    allow: ["workshop-governance-context"],
+    entries: {
+      "workshop-governance-context": {
+        enabled: true,
+        hooks: {
+          allowConversationAccess: true
+        },
+        config: {}
+      }
+    }
+  }
+}
+

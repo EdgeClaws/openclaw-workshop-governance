@@ -1,0 +1,25 @@
+{
+  "id": "workshop-governance-context",
+  "name": "Workshop Governance Context",
+  "version": "0.1.0",
+  "description": "Loads canonical lifecycle guidance and the current workspace skill-owner index into autonomous Skill Workshop reviews.",
+  "activation": {
+    "onStartup": true,
+    "onCapabilities": ["hook"]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "workspaceDir": {
+        "type": "string",
+        "minLength": 1
+      },
+      "lifecycleSkillPath": {
+        "type": "string",
+        "minLength": 1,
+        "default": "skills/openclaw-skill-plugin-lifecycle/SKILL.md"
+      }
+    }
+  }
+}
