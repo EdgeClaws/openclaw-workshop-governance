@@ -1,7 +1,7 @@
 {
   "id": "workshop-governance-context",
   "name": "Workshop Governance Context",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Loads canonical lifecycle guidance and the current workspace skill-owner index into autonomous Skill Workshop reviews.",
   "activation": {
     "onStartup": true,

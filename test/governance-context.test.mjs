@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  GOVERNANCE_SENTINEL,
+  GOVERNANCE_CONTEXT_MARKER,
   extractCronJobId,
   isWorkshopReviewContext,
   loadGovernanceContext,
@@ -98,7 +98,7 @@ test("loads the canonical lifecycle and a compact external-owner index", async (
     },
     ctx: { agentId: "main" },
   });
-  assert.match(context, new RegExp(GOVERNANCE_SENTINEL));
+  assert.match(context, new RegExp(GOVERNANCE_CONTEXT_MARKER));
   assert.match(context, /One owner per behavior\./);
   assert.match(context, /`qa-device-control`/);
   assert.match(context, /Owns folded descriptions across lines\./);
@@ -144,7 +144,35 @@ test("injects into propose and auto experience reviews, never ordinary turns", a
   );
 });
 
-test("maps the weekly auto job and fails closed without the injected sentinel", async (t) => {
+test("reloads the canonical lifecycle on every targeted review", async (t) => {
+  const workspaceDir = await fixtureWorkspace();
+  t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
+  const api = fakeApi(workspaceDir);
+  registerWorkshopGovernance(api);
+  const promptHook = api.hooks.get("before_prompt_build");
+  const ctx = {
+    runId: "skill-workshop-review:dynamic",
+    agentId: "main",
+    workspaceDir,
+  };
+
+  const first = await promptHook({ prompt: "first", messages: [] }, ctx);
+  assert.match(first.prependSystemContext, /One owner per behavior\./);
+
+  await fs.appendFile(
+    path.join(
+      workspaceDir,
+      "skills",
+      "openclaw-skill-plugin-lifecycle",
+      "SKILL.md",
+    ),
+    "\nCurrent lifecycle revision.\n",
+  );
+  const second = await promptHook({ prompt: "second", messages: [] }, ctx);
+  assert.match(second.prependSystemContext, /Current lifecycle revision\./);
+});
+
+test("maps the weekly auto job and injects the same governance context", async (t) => {
   const workspaceDir = await fixtureWorkspace();
   t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
   const api = fakeApi(workspaceDir);
@@ -173,32 +201,13 @@ test("maps the weekly auto job and fails closed without the injected sentinel", 
     { prompt: "weekly", messages: [] },
     ctx,
   );
+  assert.match(injected.prependSystemContext, /WORKSHOP_GOVERNANCE_CONTEXT_V1/);
+  assert.match(injected.prependSystemContext, /One owner per behavior\./);
   assert.match(injected.prependSystemContext, /qa-device-control/);
-
-  assert.equal(
-    api.hooks.get("before_agent_run")(
-      { prompt: "weekly", messages: [], systemPrompt: injected.prependSystemContext },
-      ctx,
-    ),
-    undefined,
-  );
-  assert.equal(
-    api.hooks.get("before_agent_run")(
-      { prompt: "weekly", messages: [], systemPrompt: "missing" },
-      ctx,
-    ).outcome,
-    "block",
-  );
-  assert.equal(
-    api.hooks.get("before_agent_run")(
-      { prompt: "ordinary", messages: [], systemPrompt: "missing" },
-      { runId: "ordinary" },
-    ),
-    undefined,
-  );
+  assert.equal(api.hooks.has("before_agent_run"), false);
 });
 
-test("a missing canonical lifecycle file rejects the targeted prompt hook", async () => {
+test("surfaces a missing canonical lifecycle file from the prompt hook", async () => {
   const api = fakeApi("/definitely/missing/workspace");
   registerWorkshopGovernance(api);
   await assert.rejects(

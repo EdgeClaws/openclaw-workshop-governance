@@ -3,7 +3,7 @@ import path from "node:path";
 
 export const EXPERIENCE_REVIEW_RUN_PREFIX = "skill-workshop-review:";
 export const WEEKLY_REVIEW_DECLARATION_PREFIX = "skill-collection-review:";
-export const GOVERNANCE_SENTINEL = "WORKSHOP_GOVERNANCE_CONTEXT_V1";
+export const GOVERNANCE_CONTEXT_MARKER = "WORKSHOP_GOVERNANCE_CONTEXT_V1";
 export const DEFAULT_LIFECYCLE_SKILL_PATH =
   "skills/openclaw-skill-plugin-lifecycle/SKILL.md";
 
@@ -109,7 +109,7 @@ export function renderGovernanceContext({ lifecycleSource, lifecyclePath, owners
     : ["- No repository/workspace skills were found."];
 
   return [
-    GOVERNANCE_SENTINEL,
+    GOVERNANCE_CONTEXT_MARKER,
     "# Autonomous Skill Workshop governance",
     `The canonical lifecycle source below was loaded at run time from \`${lifecyclePath}\`.`,
     "It remains the single policy authority; this plugin is only its runtime adapter.",

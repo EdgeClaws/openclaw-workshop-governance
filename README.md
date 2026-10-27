@@ -37,10 +37,12 @@ agent's OpenClaw configuration and reads
 `skills/openclaw-skill-plugin-lifecycle/SKILL.md`. `workspaceDir` and
 `lifecycleSkillPath` are optional overrides for nonstandard layouts.
 
-## Failure behavior
+## Runtime behavior
 
-Targeted reviews are blocked before model inference if the canonical lifecycle
-context or owner index was not injected. Unrelated turns are unaffected.
+The plugin has one job: load the current canonical lifecycle skill and owner
+index during `before_prompt_build`, then prepend them to targeted Workshop
+review system context. It does not add a second review or a separate model gate.
+Unrelated turns are unaffected.
 
 This plugin does not switch Workshop modes and does not satisfy `auto` mode's
 separate Git-provenance and recovery requirements.
@@ -55,4 +57,4 @@ npm pack --dry-run
 ```
 
 Tests cover experience reviews in both modes, weekly cron identification,
-non-Workshop isolation, dynamic policy loading, and fail-closed behavior.
+non-Workshop isolation, and dynamic policy loading.

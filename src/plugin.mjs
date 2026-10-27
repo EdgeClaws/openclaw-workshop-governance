@@ -1,5 +1,4 @@
 import {
-  GOVERNANCE_SENTINEL,
   WEEKLY_REVIEW_DECLARATION_PREFIX,
   isWorkshopReviewContext,
   loadGovernanceContext,
@@ -49,16 +48,5 @@ export function registerWorkshopGovernance(api) {
       ctx,
     });
     return { prependSystemContext: governance };
-  });
-
-  api.on("before_agent_run", (_event, ctx) => {
-    if (!isWorkshopReviewContext(ctx, weeklyReviewJobIds)) return;
-    if (_event.systemPrompt?.includes(GOVERNANCE_SENTINEL)) return;
-    return {
-      outcome: "block",
-      reason: "canonical Workshop governance context was not injected",
-      category: "workshop_governance_unavailable",
-      message: "Autonomous Workshop review skipped because canonical governance could not be loaded.",
-    };
   });
 }
