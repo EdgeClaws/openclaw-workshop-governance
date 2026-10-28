@@ -47,6 +47,7 @@ export function registerWorkshopGovernance(api) {
       openclawConfig: api.config,
       ctx,
     });
+    ctx.hookInvocation?.assertActive?.();
     return { prependSystemContext: governance };
   });
 }

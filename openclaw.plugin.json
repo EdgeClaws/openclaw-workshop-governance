@@ -1,8 +1,9 @@
 {
   "id": "workshop-governance-context",
   "name": "Workshop Governance Context",
-  "version": "0.2.0",
-  "description": "Loads canonical lifecycle guidance, authority/publication registries, and the current workspace skill inventory into autonomous Skill Workshop reviews.",
+  "version": "0.3.0",
+  "description": "Loads canonical lifecycle guidance, governance registries, and the current workspace skill inventory into autonomous Skill Workshop reviews.",
+  "categories": ["developer-tools"],
   "activation": {
     "onStartup": true,
     "onCapabilities": ["hook"]
@@ -17,19 +18,20 @@
       },
       "lifecycleSkillPath": {
         "type": "string",
-        "minLength": 1,
-        "default": "skills/openclaw-skill-plugin-lifecycle/SKILL.md"
+        "minLength": 1
       },
       "governanceReferencePaths": {
         "type": "array",
+        "minItems": 1,
+        "uniqueItems": true,
         "items": {
           "type": "string",
           "minLength": 1
-        },
-        "default": [
-          "skills/openclaw-skill-plugin-lifecycle/references/authoring-ownership.json",
-          "skills/openclaw-skill-plugin-lifecycle/references/repository-publication.json"
-        ]
+        }
+      },
+      "workspaceSkillRegistryPath": {
+        "type": "string",
+        "minLength": 1
       }
     }
   }

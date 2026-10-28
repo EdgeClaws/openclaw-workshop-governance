@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 export const EXPERIENCE_REVIEW_RUN_PREFIX = "skill-workshop-review:";
@@ -6,10 +7,43 @@ export const WEEKLY_REVIEW_DECLARATION_PREFIX = "skill-collection-review:";
 export const GOVERNANCE_CONTEXT_MARKER = "WORKSHOP_GOVERNANCE_CONTEXT_V2";
 export const DEFAULT_LIFECYCLE_SKILL_PATH =
   "skills/openclaw-skill-plugin-lifecycle/SKILL.md";
-export const DEFAULT_GOVERNANCE_REFERENCE_PATHS = [
+export const DEFAULT_COMBINED_GOVERNANCE_REFERENCE_PATH =
+  "skills/openclaw-skill-plugin-lifecycle/references/workspace-skill-registry.json";
+export const DEFAULT_SPLIT_GOVERNANCE_REFERENCE_PATHS = [
   "skills/openclaw-skill-plugin-lifecycle/references/authoring-ownership.json",
   "skills/openclaw-skill-plugin-lifecycle/references/repository-publication.json",
 ];
+
+function expandHome(value) {
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function resolveConfiguredPath(workspaceDir, configuredPath) {
+  const expanded = expandHome(configuredPath);
+  return path.isAbsolute(expanded)
+    ? path.resolve(expanded)
+    : path.resolve(workspaceDir, expanded);
+}
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function xmlAttribute(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
 
 function scalar(frontmatter, key) {
   const match = frontmatter.match(new RegExp(`^${key}:\\s*(.*?)\\s*$`, "m"));
@@ -71,11 +105,13 @@ export function resolveAgentWorkspace(openclawConfig, agentId) {
 
 export function resolveGovernanceWorkspace({ pluginConfig, openclawConfig, ctx }) {
   const explicit = pluginConfig?.workspaceDir;
-  if (typeof explicit === "string" && explicit.trim()) return path.resolve(explicit);
+  if (typeof explicit === "string" && explicit.trim()) {
+    return path.resolve(expandHome(explicit));
+  }
   const configured = resolveAgentWorkspace(openclawConfig, ctx?.agentId);
-  if (configured) return path.resolve(configured);
+  if (configured) return path.resolve(expandHome(configured));
   if (typeof ctx?.workspaceDir === "string" && ctx.workspaceDir.trim()) {
-    return path.resolve(ctx.workspaceDir);
+    return path.resolve(expandHome(ctx.workspaceDir));
   }
   throw new Error("No canonical agent workspace is configured.");
 }
@@ -104,24 +140,92 @@ export async function listWorkspaceSkillOwners(workspaceDir, lifecyclePath) {
   return summaries;
 }
 
-export async function loadGovernanceReferences(workspaceDir, configuredPaths) {
-  if (!Array.isArray(configuredPaths)) {
-    throw new Error("governanceReferencePaths must be an array.");
+export async function resolveGovernanceReferencePaths(
+  workspaceDir,
+  pluginConfig = {},
+) {
+  if (pluginConfig.governanceReferencePaths !== undefined) {
+    const configuredPaths = pluginConfig.governanceReferencePaths;
+    if (
+      !Array.isArray(configuredPaths) ||
+      configuredPaths.length === 0 ||
+      configuredPaths.some(
+        (configuredPath) =>
+          typeof configuredPath !== "string" || !configuredPath.trim(),
+      )
+    ) {
+      throw new Error(
+        "governanceReferencePaths must be a nonempty array of paths.",
+      );
+    }
+    return [...new Set(configuredPaths)];
   }
+
+  if (pluginConfig.workspaceSkillRegistryPath !== undefined) {
+    const configuredPath = pluginConfig.workspaceSkillRegistryPath;
+    if (typeof configuredPath !== "string" || !configuredPath.trim()) {
+      throw new Error("workspaceSkillRegistryPath must be a nonempty path.");
+    }
+    return [configuredPath];
+  }
+
+  const combinedPath = resolveConfiguredPath(
+    workspaceDir,
+    DEFAULT_COMBINED_GOVERNANCE_REFERENCE_PATH,
+  );
+  if (await exists(combinedPath)) {
+    return [DEFAULT_COMBINED_GOVERNANCE_REFERENCE_PATH];
+  }
+
+  const splitPresence = await Promise.all(
+    DEFAULT_SPLIT_GOVERNANCE_REFERENCE_PATHS.map((configuredPath) =>
+      exists(resolveConfiguredPath(workspaceDir, configuredPath)),
+    ),
+  );
+  if (splitPresence.some(Boolean)) {
+    return DEFAULT_SPLIT_GOVERNANCE_REFERENCE_PATHS;
+  }
+
+  return [DEFAULT_COMBINED_GOVERNANCE_REFERENCE_PATH];
+}
+
+export async function loadGovernanceReferences(workspaceDir, configuredPaths) {
   return Promise.all(
     configuredPaths.map(async (configuredPath) => {
-      const absolutePath = path.isAbsolute(configuredPath)
-        ? path.resolve(configuredPath)
-        : path.resolve(workspaceDir, configuredPath);
+      const absolutePath = resolveConfiguredPath(workspaceDir, configuredPath);
       const relativePath = path.relative(workspaceDir, absolutePath);
       try {
+        const source = await fs.readFile(absolutePath, "utf8");
+        if (path.extname(absolutePath).toLowerCase() === ".json") {
+          try {
+            const parsed = JSON.parse(source);
+            const isWorkspaceRegistry =
+              path.basename(absolutePath) === "workspace-skill-registry.json";
+            if (
+              (isWorkspaceRegistry || parsed?.schemaVersion !== undefined) &&
+              parsed?.schemaVersion !== 1
+            ) {
+              return {
+                relativePath,
+                source: undefined,
+                issue: `UNSUPPORTED WORKSPACE REGISTRY SCHEMA (${String(parsed?.schemaVersion ?? "missing")})`,
+              };
+            }
+          } catch (error) {
+            return {
+              relativePath,
+              source: undefined,
+              issue: `INVALID JSON (${error.message})`,
+            };
+          }
+        }
         return {
           relativePath,
-          source: await fs.readFile(absolutePath, "utf8"),
+          source,
         };
       } catch (error) {
         if (error?.code !== "ENOENT") throw error;
-        return { relativePath, source: undefined };
+        return { relativePath, source: undefined, issue: "MISSING" };
       }
     }),
   );
@@ -140,10 +244,10 @@ export function renderGovernanceContext({
       )
     : ["- No repository/workspace skills were found."];
 
-  const referenceLines = references.flatMap(({ relativePath, source }) => [
-    `<governance_reference path="${relativePath}">`,
+  const referenceLines = references.flatMap(({ relativePath, source, issue }) => [
+    `<governance_reference path="${xmlAttribute(relativePath)}">`,
     source?.trim() ||
-      "MISSING: use the lifecycle skill's owner-only fallback; never infer a grant.",
+      `${issue ?? "UNAVAILABLE"}: use the lifecycle skill's owner-only fallback; never infer a grant.`,
     "</governance_reference>",
   ]);
 
@@ -176,11 +280,12 @@ export async function loadGovernanceContext({ pluginConfig, openclawConfig, ctx 
   const configuredPath =
     pluginConfig?.lifecycleSkillPath ?? DEFAULT_LIFECYCLE_SKILL_PATH;
   const lifecyclePath = path.isAbsolute(configuredPath)
-    ? path.resolve(configuredPath)
-    : path.resolve(workspaceDir, configuredPath);
-  const configuredReferencePaths =
-    pluginConfig?.governanceReferencePaths ??
-    DEFAULT_GOVERNANCE_REFERENCE_PATHS;
+    ? path.resolve(expandHome(configuredPath))
+    : path.resolve(workspaceDir, expandHome(configuredPath));
+  const configuredReferencePaths = await resolveGovernanceReferencePaths(
+    workspaceDir,
+    pluginConfig,
+  );
   const [lifecycleSource, owners, references] = await Promise.all([
     fs.readFile(lifecyclePath, "utf8"),
     listWorkspaceSkillOwners(workspaceDir, lifecyclePath),

@@ -1,6 +1,6 @@
 {
   "name": "@edgeclaws/openclaw-workshop-governance",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Inject canonical lifecycle governance into autonomous Skill Workshop reviews.",
   "scripts": {

@@ -12,10 +12,7 @@
           allowConversationAccess: true
         },
         config: {
-          governanceReferencePaths: [
-            "skills/openclaw-skill-plugin-lifecycle/references/authoring-ownership.json",
-            "skills/openclaw-skill-plugin-lifecycle/references/repository-publication.json"
-          ]
+          lifecycleSkillPath: "skills/openclaw-skill-plugin-lifecycle/SKILL.md"
         }
       }
     }
