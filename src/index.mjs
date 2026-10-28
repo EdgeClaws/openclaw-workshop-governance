@@ -8,4 +8,3 @@ export default definePluginEntry({
     "Injects canonical lifecycle governance into autonomous Skill Workshop reviews.",
   register: registerWorkshopGovernance,
 });
-
