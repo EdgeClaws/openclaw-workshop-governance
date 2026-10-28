@@ -2,9 +2,9 @@
 
 A narrow OpenClaw hook plugin that gives autonomous Skill Workshop reviews the
 same canonical skill/plugin lifecycle guidance used by foreground authoring.
-It reads that guidance at run time and adds a compact index of current
-repository/workspace skill owners. It does not contain a second copy of the
-policy and does not run a second review pass.
+It reads that guidance and its authority/publication registries at run time,
+then adds a compact index of current repository/workspace skills. It does not
+contain a second copy of policy and does not run a second review pass.
 
 ## Covered lanes
 
@@ -34,13 +34,20 @@ be `true`. Prompt injection must not be disabled.
 
 By default, the plugin resolves the canonical workspace from the current
 agent's OpenClaw configuration and reads
-`skills/openclaw-skill-plugin-lifecycle/SKILL.md`. `workspaceDir` and
-`lifecycleSkillPath` are optional overrides for nonstandard layouts.
+`skills/openclaw-skill-plugin-lifecycle/SKILL.md` plus:
+
+- `references/authoring-ownership.json`
+- `references/repository-publication.json`
+
+`workspaceDir`, `lifecycleSkillPath`, and `governanceReferencePaths` are
+optional overrides for nonstandard layouts. A missing registry is surfaced in
+the injected context with an owner-only fallback; the plugin never invents a
+grant.
 
 ## Runtime behavior
 
-The plugin has one job: load the current canonical lifecycle skill and owner
-index during `before_prompt_build`, then prepend them to targeted Workshop
+The plugin has one job: load the current canonical lifecycle bundle and skill
+inventory during `before_prompt_build`, then prepend them to targeted Workshop
 review system context. It does not add a second review or a separate model gate.
 Unrelated turns are unaffected.
 
@@ -57,4 +64,5 @@ npm pack --dry-run
 ```
 
 Tests cover experience reviews in both modes, weekly cron identification,
-non-Workshop isolation, and dynamic policy loading.
+non-Workshop isolation, dynamic policy/registry loading, and the owner-only
+missing-registry fallback.

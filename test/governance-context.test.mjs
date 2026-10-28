@@ -19,6 +19,15 @@ async function fixtureWorkspace() {
     path.join(workspaceDir, "skills", "openclaw-skill-plugin-lifecycle"),
     { recursive: true },
   );
+  await fs.mkdir(
+    path.join(
+      workspaceDir,
+      "skills",
+      "openclaw-skill-plugin-lifecycle",
+      "references",
+    ),
+    { recursive: true },
+  );
   await fs.mkdir(path.join(workspaceDir, "skills", "qa-device-control"), {
     recursive: true,
   });
@@ -41,6 +50,26 @@ async function fixtureWorkspace() {
   await fs.writeFile(
     path.join(workspaceDir, "skills", "folded-owner", "SKILL.md"),
     "---\nname: folded-owner\ndescription: >\n  Owns folded descriptions\n  across lines.\n---\n",
+  );
+  await fs.writeFile(
+    path.join(
+      workspaceDir,
+      "skills",
+      "openclaw-skill-plugin-lifecycle",
+      "references",
+      "authoring-ownership.json",
+    ),
+    '{"defaultPolicy":{"workspaceOwner":"owner@example.com"},"grants":[{"artifact":"skills/qa-device-control","principal":"qa@example.com","role":"maintainer"}]}\n',
+  );
+  await fs.writeFile(
+    path.join(
+      workspaceDir,
+      "skills",
+      "openclaw-skill-plugin-lifecycle",
+      "references",
+      "repository-publication.json",
+    ),
+    '{"defaults":{"canonicalRepository":"enclosing-git-root"},"artifacts":{"skills/qa-device-control":{"publications":[]}}}\n',
   );
   return workspaceDir;
 }
@@ -88,7 +117,7 @@ test("classifies experience and known weekly review lanes only", () => {
   );
 });
 
-test("loads the canonical lifecycle and a compact external-owner index", async (t) => {
+test("loads the lifecycle, registries, and compact skill inventory", async (t) => {
   const workspaceDir = await fixtureWorkspace();
   t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
   const context = await loadGovernanceContext({
@@ -100,6 +129,8 @@ test("loads the canonical lifecycle and a compact external-owner index", async (
   });
   assert.match(context, new RegExp(GOVERNANCE_CONTEXT_MARKER));
   assert.match(context, /One owner per behavior\./);
+  assert.match(context, /qa@example\.com/);
+  assert.match(context, /enclosing-git-root/);
   assert.match(context, /`qa-device-control`/);
   assert.match(context, /Owns folded descriptions across lines\./);
   assert.doesNotMatch(context, /`openclaw-skill-plugin-lifecycle` —/);
@@ -113,6 +144,13 @@ test("manifest declares explicit startup activation", async () => {
     ),
   );
   assert.equal(manifest.activation.onStartup, true);
+  assert.deepEqual(
+    manifest.configSchema.properties.governanceReferencePaths.default,
+    [
+      "skills/openclaw-skill-plugin-lifecycle/references/authoring-ownership.json",
+      "skills/openclaw-skill-plugin-lifecycle/references/repository-publication.json",
+    ],
+  );
 });
 
 test("injects into propose and auto experience reviews, never ordinary turns", async (t) => {
@@ -170,6 +208,35 @@ test("reloads the canonical lifecycle on every targeted review", async (t) => {
   );
   const second = await promptHook({ prompt: "second", messages: [] }, ctx);
   assert.match(second.prependSystemContext, /Current lifecycle revision\./);
+
+  await fs.writeFile(
+    path.join(
+      workspaceDir,
+      "skills",
+      "openclaw-skill-plugin-lifecycle",
+      "references",
+      "authoring-ownership.json",
+    ),
+    '{"defaultPolicy":{"workspaceOwner":"new-owner@example.com"}}\n',
+  );
+  const third = await promptHook({ prompt: "third", messages: [] }, ctx);
+  assert.match(third.prependSystemContext, /new-owner@example\.com/);
+});
+
+test("missing registry uses the owner-only fallback", async (t) => {
+  const workspaceDir = await fixtureWorkspace();
+  t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
+  const context = await loadGovernanceContext({
+    pluginConfig: {
+      governanceReferencePaths: ["missing/ownership.json"],
+    },
+    openclawConfig: {
+      agents: { defaults: { workspace: workspaceDir } },
+    },
+    ctx: { agentId: "main" },
+  });
+  assert.match(context, /owner-only fallback/);
+  assert.match(context, /never infer a grant/);
 });
 
 test("maps the weekly auto job and injects the same governance context", async (t) => {
@@ -201,7 +268,7 @@ test("maps the weekly auto job and injects the same governance context", async (
     { prompt: "weekly", messages: [] },
     ctx,
   );
-  assert.match(injected.prependSystemContext, /WORKSHOP_GOVERNANCE_CONTEXT_V1/);
+  assert.match(injected.prependSystemContext, /WORKSHOP_GOVERNANCE_CONTEXT_V2/);
   assert.match(injected.prependSystemContext, /One owner per behavior\./);
   assert.match(injected.prependSystemContext, /qa-device-control/);
   assert.equal(api.hooks.has("before_agent_run"), false);

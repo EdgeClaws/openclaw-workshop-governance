@@ -11,9 +11,13 @@
         hooks: {
           allowConversationAccess: true
         },
-        config: {}
+        config: {
+          governanceReferencePaths: [
+            "skills/openclaw-skill-plugin-lifecycle/references/authoring-ownership.json",
+            "skills/openclaw-skill-plugin-lifecycle/references/repository-publication.json"
+          ]
+        }
       }
     }
   }
 }
-

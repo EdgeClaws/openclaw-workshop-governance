@@ -3,9 +3,13 @@ import path from "node:path";
 
 export const EXPERIENCE_REVIEW_RUN_PREFIX = "skill-workshop-review:";
 export const WEEKLY_REVIEW_DECLARATION_PREFIX = "skill-collection-review:";
-export const GOVERNANCE_CONTEXT_MARKER = "WORKSHOP_GOVERNANCE_CONTEXT_V1";
+export const GOVERNANCE_CONTEXT_MARKER = "WORKSHOP_GOVERNANCE_CONTEXT_V2";
 export const DEFAULT_LIFECYCLE_SKILL_PATH =
   "skills/openclaw-skill-plugin-lifecycle/SKILL.md";
+export const DEFAULT_GOVERNANCE_REFERENCE_PATHS = [
+  "skills/openclaw-skill-plugin-lifecycle/references/authoring-ownership.json",
+  "skills/openclaw-skill-plugin-lifecycle/references/repository-publication.json",
+];
 
 function scalar(frontmatter, key) {
   const match = frontmatter.match(new RegExp(`^${key}:\\s*(.*?)\\s*$`, "m"));
@@ -100,13 +104,48 @@ export async function listWorkspaceSkillOwners(workspaceDir, lifecyclePath) {
   return summaries;
 }
 
-export function renderGovernanceContext({ lifecycleSource, lifecyclePath, owners }) {
+export async function loadGovernanceReferences(workspaceDir, configuredPaths) {
+  if (!Array.isArray(configuredPaths)) {
+    throw new Error("governanceReferencePaths must be an array.");
+  }
+  return Promise.all(
+    configuredPaths.map(async (configuredPath) => {
+      const absolutePath = path.isAbsolute(configuredPath)
+        ? path.resolve(configuredPath)
+        : path.resolve(workspaceDir, configuredPath);
+      const relativePath = path.relative(workspaceDir, absolutePath);
+      try {
+        return {
+          relativePath,
+          source: await fs.readFile(absolutePath, "utf8"),
+        };
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+        return { relativePath, source: undefined };
+      }
+    }),
+  );
+}
+
+export function renderGovernanceContext({
+  lifecycleSource,
+  lifecyclePath,
+  owners,
+  references = [],
+}) {
   const ownerLines = owners.length
     ? owners.map(
         ({ name, description, relativePath }) =>
           `- \`${name}\` — ${description} (\`${relativePath}\`)`,
       )
     : ["- No repository/workspace skills were found."];
+
+  const referenceLines = references.flatMap(({ relativePath, source }) => [
+    `<governance_reference path="${relativePath}">`,
+    source?.trim() ||
+      "MISSING: use the lifecycle skill's owner-only fallback; never infer a grant.",
+    "</governance_reference>",
+  ]);
 
   return [
     GOVERNANCE_CONTEXT_MARKER,
@@ -118,9 +157,13 @@ export function renderGovernanceContext({ lifecycleSource, lifecyclePath, owners
     lifecycleSource.trim(),
     "</canonical_lifecycle_skill>",
     "",
-    "<current_repository_skill_owners>",
+    "<governance_references>",
+    ...referenceLines,
+    "</governance_references>",
+    "",
+    "<current_repository_skill_inventory>",
     ...ownerLines,
-    "</current_repository_skill_owners>",
+    "</current_repository_skill_inventory>",
   ].join("\n");
 }
 
@@ -135,13 +178,18 @@ export async function loadGovernanceContext({ pluginConfig, openclawConfig, ctx 
   const lifecyclePath = path.isAbsolute(configuredPath)
     ? path.resolve(configuredPath)
     : path.resolve(workspaceDir, configuredPath);
-  const [lifecycleSource, owners] = await Promise.all([
+  const configuredReferencePaths =
+    pluginConfig?.governanceReferencePaths ??
+    DEFAULT_GOVERNANCE_REFERENCE_PATHS;
+  const [lifecycleSource, owners, references] = await Promise.all([
     fs.readFile(lifecyclePath, "utf8"),
     listWorkspaceSkillOwners(workspaceDir, lifecyclePath),
+    loadGovernanceReferences(workspaceDir, configuredReferencePaths),
   ]);
   return renderGovernanceContext({
     lifecycleSource,
     lifecyclePath: path.relative(workspaceDir, lifecyclePath),
     owners,
+    references,
   });
 }
