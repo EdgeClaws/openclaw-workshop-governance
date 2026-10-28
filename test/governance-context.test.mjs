@@ -186,7 +186,7 @@ test("explicit reference lists win over the single-registry shortcut", async (t)
   assert.doesNotMatch(context, /missing\/ignored/);
 });
 
-test("supports Sean's single combined-registry shortcut", async (t) => {
+test("supports the single combined-registry shortcut", async (t) => {
   const workspaceDir = await fixtureWorkspace({ layout: "none" });
   t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
   await fs.writeFile(
