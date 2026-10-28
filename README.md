@@ -2,9 +2,10 @@
 
 A narrow OpenClaw hook plugin that gives autonomous Skill Workshop reviews the
 same canonical skill/plugin lifecycle guidance used by foreground authoring.
-It reads that guidance at run time and adds a compact index of current
-repository/workspace skill owners. It does not contain a second copy of the
-policy and does not run a second review pass.
+It reads that guidance and the workspace authorization/publication registry at
+run time, then adds a compact index of current repository/workspace skill
+owners. It does not contain a second copy of the policy and does not run a
+second review pass.
 
 ## Covered lanes
 
@@ -33,16 +34,22 @@ Non-bundled prompt hooks require
 be `true`. Prompt injection must not be disabled.
 
 By default, the plugin resolves the canonical workspace from the current
-agent's OpenClaw configuration and reads
-`skills/openclaw-skill-plugin-lifecycle/SKILL.md`. `workspaceDir` and
-`lifecycleSkillPath` are optional overrides for nonstandard layouts.
+agent's OpenClaw configuration and reads both
+`skills/openclaw-skill-plugin-lifecycle/SKILL.md` and
+`skills/openclaw-skill-plugin-lifecycle/references/workspace-skill-registry.json`.
+`workspaceDir`, `lifecycleSkillPath`, and `workspaceSkillRegistryPath` are
+optional overrides for nonstandard layouts.
+
+Portable operator setup lives in the lifecycle bundle's
+`references/workshop-governance-enforcement.md`.
 
 ## Runtime behavior
 
-The plugin has one job: load the current canonical lifecycle skill and owner
-index during `before_prompt_build`, then prepend them to targeted Workshop
-review system context. It does not add a second review or a separate model gate.
-Unrelated turns are unaffected.
+The plugin has one job: load the current canonical lifecycle skill, workspace
+registry, and owner index during `before_prompt_build`, then prepend them to
+targeted Workshop review system context. Invalid or missing policy fails the
+targeted review instead of silently dropping governance. It does not add a
+second review or a separate model gate. Unrelated turns are unaffected.
 
 This plugin does not switch Workshop modes and does not satisfy `auto` mode's
 separate Git-provenance and recovery requirements.
@@ -57,4 +64,4 @@ npm pack --dry-run
 ```
 
 Tests cover experience reviews in both modes, weekly cron identification,
-non-Workshop isolation, and dynamic policy loading.
+non-Workshop isolation, and dynamic lifecycle/registry loading.

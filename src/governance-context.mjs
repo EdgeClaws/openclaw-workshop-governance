@@ -3,9 +3,11 @@ import path from "node:path";
 
 export const EXPERIENCE_REVIEW_RUN_PREFIX = "skill-workshop-review:";
 export const WEEKLY_REVIEW_DECLARATION_PREFIX = "skill-collection-review:";
-export const GOVERNANCE_CONTEXT_MARKER = "WORKSHOP_GOVERNANCE_CONTEXT_V1";
+export const GOVERNANCE_CONTEXT_MARKER = "WORKSHOP_GOVERNANCE_CONTEXT_V2";
 export const DEFAULT_LIFECYCLE_SKILL_PATH =
   "skills/openclaw-skill-plugin-lifecycle/SKILL.md";
+export const DEFAULT_WORKSPACE_SKILL_REGISTRY_PATH =
+  "skills/openclaw-skill-plugin-lifecycle/references/workspace-skill-registry.json";
 
 function scalar(frontmatter, key) {
   const match = frontmatter.match(new RegExp(`^${key}:\\s*(.*?)\\s*$`, "m"));
@@ -100,7 +102,17 @@ export async function listWorkspaceSkillOwners(workspaceDir, lifecyclePath) {
   return summaries;
 }
 
-export function renderGovernanceContext({ lifecycleSource, lifecyclePath, owners }) {
+export function renderGovernanceContext({
+  lifecycleSource,
+  lifecyclePath,
+  registrySource,
+  registryPath,
+  owners,
+}) {
+  const registry = JSON.parse(registrySource);
+  if (registry?.schemaVersion !== 1) {
+    throw new Error("Unsupported workspace skill registry schema version.");
+  }
   const ownerLines = owners.length
     ? owners.map(
         ({ name, description, relativePath }) =>
@@ -117,6 +129,10 @@ export function renderGovernanceContext({ lifecycleSource, lifecyclePath, owners
     "<canonical_lifecycle_skill>",
     lifecycleSource.trim(),
     "</canonical_lifecycle_skill>",
+    "",
+    `<workspace_skill_registry source="${registryPath}">`,
+    JSON.stringify(registry, null, 2),
+    "</workspace_skill_registry>",
     "",
     "<current_repository_skill_owners>",
     ...ownerLines,
@@ -135,13 +151,22 @@ export async function loadGovernanceContext({ pluginConfig, openclawConfig, ctx 
   const lifecyclePath = path.isAbsolute(configuredPath)
     ? path.resolve(configuredPath)
     : path.resolve(workspaceDir, configuredPath);
-  const [lifecycleSource, owners] = await Promise.all([
+  const configuredRegistryPath =
+    pluginConfig?.workspaceSkillRegistryPath ??
+    DEFAULT_WORKSPACE_SKILL_REGISTRY_PATH;
+  const registryPath = path.isAbsolute(configuredRegistryPath)
+    ? path.resolve(configuredRegistryPath)
+    : path.resolve(workspaceDir, configuredRegistryPath);
+  const [lifecycleSource, registrySource, owners] = await Promise.all([
     fs.readFile(lifecyclePath, "utf8"),
+    fs.readFile(registryPath, "utf8"),
     listWorkspaceSkillOwners(workspaceDir, lifecyclePath),
   ]);
   return renderGovernanceContext({
     lifecycleSource,
     lifecyclePath: path.relative(workspaceDir, lifecyclePath),
+    registrySource,
+    registryPath: path.relative(workspaceDir, registryPath),
     owners,
   });
 }

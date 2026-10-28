@@ -11,9 +11,11 @@
         hooks: {
           allowConversationAccess: true
         },
-        config: {}
+        config: {
+          lifecycleSkillPath: "skills/openclaw-skill-plugin-lifecycle/SKILL.md",
+          workspaceSkillRegistryPath: "skills/openclaw-skill-plugin-lifecycle/references/workspace-skill-registry.json"
+        }
       }
     }
   }
 }
-

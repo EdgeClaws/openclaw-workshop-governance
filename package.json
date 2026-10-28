@@ -1,8 +1,8 @@
 {
   "name": "@edgeclaws/openclaw-workshop-governance",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Inject canonical lifecycle governance into autonomous Skill Workshop reviews.",
+  "description": "Inject canonical lifecycle and workspace-skill policy into autonomous Skill Workshop reviews.",
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },

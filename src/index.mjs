@@ -5,7 +5,6 @@ export default definePluginEntry({
   id: "workshop-governance-context",
   name: "Workshop Governance Context",
   description:
-    "Injects canonical lifecycle governance into autonomous Skill Workshop reviews.",
+    "Injects canonical lifecycle and workspace-skill policy into autonomous Skill Workshop reviews.",
   register: registerWorkshopGovernance,
 });
-
