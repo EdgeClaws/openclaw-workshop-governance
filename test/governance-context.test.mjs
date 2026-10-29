@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
+import {
+  commitWorkshopChanges,
+  inspectGitWorkspace,
+} from "../src/auto-provenance.mjs";
 import {
   GOVERNANCE_CONTEXT_MARKER,
   extractCronJobId,
@@ -11,6 +17,8 @@ import {
   resolveGovernanceReferencePaths,
 } from "../src/governance-context.mjs";
 import { registerWorkshopGovernance } from "../src/plugin.mjs";
+
+const execFileAsync = promisify(execFile);
 
 const lifecycleParts = ["skills", "openclaw-skill-plugin-lifecycle"];
 
@@ -256,14 +264,14 @@ test("rejects malformed explicit reference configuration", async (t) => {
   );
 });
 
-test("manifest declares hook startup and both registry configuration shapes", async () => {
+test("manifest declares hook startup, provenance, and registry configuration", async () => {
   const manifest = JSON.parse(
     await fs.readFile(
       new URL("../openclaw.plugin.json", import.meta.url),
       "utf8",
     ),
   );
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.4.0");
   assert.equal(manifest.activation.onStartup, true);
   assert.deepEqual(manifest.activation.onCapabilities, ["hook"]);
   assert.equal(
@@ -274,6 +282,114 @@ test("manifest declares hook startup and both registry configuration shapes", as
     manifest.configSchema.properties.workspaceSkillRegistryPath.type,
     "string",
   );
+  assert.equal(
+    manifest.configSchema.properties.autoCommitProvenance.type,
+    "boolean",
+  );
+});
+
+test("commits successful autonomous edits with provenance", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "workshop-git-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await execFileAsync("git", ["init", "-q", root]);
+  await execFileAsync("git", ["-C", root, "config", "user.name", "Test"]);
+  await execFileAsync("git", [
+    "-C",
+    root,
+    "config",
+    "user.email",
+    "test@example.com",
+  ]);
+  await fs.writeFile(path.join(root, "SKILL.md"), "initial\n");
+  await execFileAsync("git", ["-C", root, "add", "SKILL.md"]);
+  await execFileAsync("git", ["-C", root, "commit", "-q", "-m", "initial"]);
+  const baseline = await inspectGitWorkspace(root);
+  await fs.appendFile(path.join(root, "SKILL.md"), "updated\n");
+  const result = await commitWorkshopChanges({
+    baseline,
+    runId: "skill-workshop-review:test",
+    agentId: "main",
+  });
+  assert.equal(result.action, "committed");
+  assert.equal((await inspectGitWorkspace(root)).status, "");
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    root,
+    "log",
+    "-1",
+    "--format=%B",
+  ]);
+  assert.match(stdout, /Change-Origin: workshop-autonomous/);
+  assert.match(stdout, /Source-Context: skill-workshop-review:test/);
+});
+
+test("auto review hooks gate a clean baseline and commit at agent end", async (t) => {
+  const workspaceDir = await fixtureWorkspace();
+  const workshopDir = await fs.mkdtemp(path.join(os.tmpdir(), "workshop-hook-"));
+  t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
+  t.after(() => fs.rm(workshopDir, { recursive: true, force: true }));
+  await execFileAsync("git", ["init", "-q", workshopDir]);
+  await execFileAsync("git", ["-C", workshopDir, "config", "user.name", "Test"]);
+  await execFileAsync("git", [
+    "-C",
+    workshopDir,
+    "config",
+    "user.email",
+    "test@example.com",
+  ]);
+  await fs.writeFile(path.join(workshopDir, "SKILL.md"), "initial\n");
+  await execFileAsync("git", ["-C", workshopDir, "add", "SKILL.md"]);
+  await execFileAsync("git", [
+    "-C",
+    workshopDir,
+    "commit",
+    "-q",
+    "-m",
+    "initial",
+  ]);
+
+  const api = fakeApi(workspaceDir, { autoCommitProvenance: true });
+  api.config.skills = { workshop: { autonomous: { mode: "auto" } } };
+  registerWorkshopGovernance(api);
+  await api.hooks.get("cron_reconciled")(
+    { reason: "startup", enabled: true },
+    {
+      getCron: () => ({
+        list: async () => [
+          { id: "weekly-1", declarationKey: "skill-collection-review:main" },
+        ],
+      }),
+    },
+  );
+  const ctx = {
+    runId: "run-1",
+    agentId: "main",
+    sessionKey: "agent:main:cron:weekly-1:run:session-1",
+    workspaceDir: workshopDir,
+    hookInvocation: { assertActive() {} },
+  };
+  await api.hooks.get("before_prompt_build")(
+    { prompt: "review", messages: [] },
+    ctx,
+  );
+  assert.deepEqual(
+    await api.hooks.get("before_agent_run")({ runId: "run-1" }, ctx),
+    { outcome: "pass" },
+  );
+  await fs.appendFile(path.join(workshopDir, "SKILL.md"), "updated\n");
+  await api.hooks.get("agent_end")(
+    { runId: "run-1", messages: [], success: true },
+    ctx,
+  );
+  const { stdout } = await execFileAsync("git", [
+    "-C",
+    workshopDir,
+    "log",
+    "-1",
+    "--format=%B",
+  ]);
+  assert.match(stdout, /Change-Origin: workshop-autonomous/);
+  assert.equal((await inspectGitWorkspace(workshopDir)).status, "");
 });
 
 test("injects into propose and auto reviews, never ordinary turns", async (t) => {
@@ -370,7 +486,8 @@ test("maps the weekly auto job and injects the same governance context", async (
   assert.match(injected.prependSystemContext, /WORKSHOP_GOVERNANCE_CONTEXT_V2/);
   assert.match(injected.prependSystemContext, /One owner per behavior\./);
   assert.match(injected.prependSystemContext, /qa-device-control/);
-  assert.equal(api.hooks.has("before_agent_run"), false);
+  assert.equal(api.hooks.has("before_agent_run"), true);
+  assert.equal(api.hooks.has("agent_end"), true);
 });
 
 test("surfaces a missing canonical lifecycle file from the prompt hook", async () => {

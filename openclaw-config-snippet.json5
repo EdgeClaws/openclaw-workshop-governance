@@ -12,7 +12,8 @@
           allowConversationAccess: true
         },
         config: {
-          lifecycleSkillPath: "skills/openclaw-skill-plugin-lifecycle/SKILL.md"
+          lifecycleSkillPath: "skills/openclaw-skill-plugin-lifecycle/SKILL.md",
+          autoCommitProvenance: true
         }
       }
     }

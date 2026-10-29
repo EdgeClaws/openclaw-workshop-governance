@@ -4,7 +4,9 @@ A narrow OpenClaw hook plugin that gives autonomous Skill Workshop reviews the
 same canonical skill/plugin lifecycle guidance used by foreground authoring.
 It reads that guidance and its governance registries at run time, then adds a
 compact index of current repository/workspace skills. It does not contain a
-second copy of policy and does not run a second review pass.
+second copy of policy and does not run a second review pass. When
+`autoCommitProvenance` is enabled, it also blocks dirty starting trees and
+commits successful direct-auto maintenance with Git provenance.
 
 The editable upstream is this repository. The
 `openclaw-skill-plugin-lifecycle` skill also carries a checksum-verified
@@ -56,15 +58,22 @@ single-registry compatibility shortcut. An explicit reference list wins over
 the shortcut. A missing or malformed registry is surfaced in the injected
 context with an owner-only fallback; the plugin never invents a grant.
 
+Set `autoCommitProvenance: true` only after the Workshop tree has a clean Git
+baseline. Successful targeted `auto` reviews then end with either a clean no-op,
+a verified agent-created provenance commit, or an adapter-created commit with
+`Change-Origin: workshop-autonomous`. A dirty starting tree is blocked.
+
 ## Runtime behavior
 
-The plugin has one job: load the current canonical lifecycle bundle and skill
-inventory during `before_prompt_build`, then prepend them to targeted Workshop
-review system context. It does not add a second review or a separate model gate.
-Unrelated turns are unaffected.
+The plugin loads the current canonical lifecycle bundle and skill inventory
+during `before_prompt_build`, then prepends them to targeted Workshop review
+system context. Optional provenance enforcement snapshots the clean Git baseline,
+gates the run before model submission, and commits successful changes at
+`agent_end`. It does not add a second model review. Unrelated turns are
+unaffected.
 
-This plugin does not switch Workshop modes and does not satisfy `auto` mode's
-separate Git-provenance and recovery requirements.
+This plugin does not switch Workshop modes. Recovery still comes from the
+Workshop repository's Git history.
 
 ## Development
 

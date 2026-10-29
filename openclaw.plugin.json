@@ -1,7 +1,7 @@
 {
   "id": "workshop-governance-context",
   "name": "Workshop Governance Context",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Loads canonical lifecycle guidance, governance registries, and the current workspace skill inventory into autonomous Skill Workshop reviews.",
   "categories": ["developer-tools"],
   "activation": {
@@ -32,6 +32,9 @@
       "workspaceSkillRegistryPath": {
         "type": "string",
         "minLength": 1
+      },
+      "autoCommitProvenance": {
+        "type": "boolean"
       }
     }
   }
