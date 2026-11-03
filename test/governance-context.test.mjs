@@ -271,7 +271,7 @@ test("manifest declares hook startup, provenance, and registry configuration", a
       "utf8",
     ),
   );
-  assert.equal(manifest.version, "0.4.0");
+  assert.equal(manifest.version, "0.4.1");
   assert.equal(manifest.activation.onStartup, true);
   assert.deepEqual(manifest.activation.onCapabilities, ["hook"]);
   assert.equal(
@@ -286,6 +286,51 @@ test("manifest declares hook startup, provenance, and registry configuration", a
     manifest.configSchema.properties.autoCommitProvenance.type,
     "boolean",
   );
+});
+
+test("static evaluator blocks Workshop duplicates of workspace owners", async (t) => {
+  const workspaceDir = await fixtureWorkspace();
+  t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
+  const api = fakeApi(workspaceDir);
+  registerWorkshopGovernance(api);
+  const evaluator = api.hooks.get("skill_proposal_evaluate");
+  const result = await evaluator(
+    {
+      proposal: { id: "p1", kind: "update", revision: "v1", revisionSha256: "a" },
+      skill: {
+        name: "qa-device-control",
+        skillKey: "qa-device-control",
+        description: "duplicate",
+      },
+      candidate: { skillMd: {}, files: [], treeSha256: "a" },
+      reason: "apply",
+    },
+    { workspaceDir },
+  );
+  assert.equal(result.decision, "block");
+  assert.match(result.decisionReason, /qa-device-control/);
+  assert.equal(result.findings[0].ruleId, "workspace-owner-conflict");
+});
+
+test("static evaluator passes a Workshop-owned target", async (t) => {
+  const workspaceDir = await fixtureWorkspace();
+  t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
+  const api = fakeApi(workspaceDir);
+  registerWorkshopGovernance(api);
+  const result = await api.hooks.get("skill_proposal_evaluate")(
+    {
+      proposal: { id: "p2", kind: "update", revision: "v1", revisionSha256: "b" },
+      skill: {
+        name: "campaign-claims-review",
+        skillKey: "campaign-claims-review",
+        description: "Workshop owned",
+      },
+      candidate: { skillMd: {}, files: [], treeSha256: "b" },
+      reason: "apply",
+    },
+    { workspaceDir },
+  );
+  assert.equal(result.decision, "pass");
 });
 
 test("commits successful autonomous edits with provenance", async (t) => {

@@ -1,8 +1,8 @@
 {
   "id": "workshop-governance-context",
   "name": "Workshop Governance Context",
-  "version": "0.4.0",
-  "description": "Loads canonical lifecycle guidance, governance registries, and the current workspace skill inventory into autonomous Skill Workshop reviews.",
+  "version": "0.4.1",
+  "description": "Loads lifecycle governance, blocks workspace-owner conflicts, and records autonomous Workshop changes with Git provenance.",
   "categories": ["developer-tools"],
   "activation": {
     "onStartup": true,

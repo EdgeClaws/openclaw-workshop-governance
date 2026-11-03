@@ -1,7 +1,10 @@
+import path from "node:path";
 import {
   WEEKLY_REVIEW_DECLARATION_PREFIX,
   isWorkshopReviewContext,
+  listWorkspaceSkillOwners,
   loadGovernanceContext,
+  resolveGovernanceWorkspace,
 } from "./governance-context.mjs";
 import {
   commitWorkshopChanges,
@@ -104,6 +107,46 @@ export function registerWorkshopGovernance(api) {
       };
     }
     return { outcome: "pass" };
+  });
+
+  api.on("skill_proposal_evaluate", async (event, ctx) => {
+    const workspaceDir = resolveGovernanceWorkspace({
+      pluginConfig: api.pluginConfig,
+      openclawConfig: api.config,
+      ctx,
+    });
+    const lifecyclePath = path.resolve(
+      workspaceDir,
+      api.pluginConfig?.lifecycleSkillPath ??
+        "skills/openclaw-skill-plugin-lifecycle/SKILL.md",
+    );
+    const owners = await listWorkspaceSkillOwners(workspaceDir, lifecyclePath);
+    const conflict = owners.find(
+      (owner) =>
+        owner.name === event.skill.name ||
+        owner.relativePath === `skills/${event.skill.skillKey}/SKILL.md`,
+    );
+    if (!conflict) {
+      return {
+        evaluatorVersion: "1",
+        mode: "static-ownership",
+        decision: "pass",
+        summary: "No workspace-owned skill conflicts with this Workshop target.",
+      };
+    }
+    return {
+      evaluatorVersion: "1",
+      mode: "static-ownership",
+      decision: "block",
+      decisionReason: `Workspace owner already exists at ${conflict.relativePath}.`,
+      findings: [
+        {
+          ruleId: "workspace-owner-conflict",
+          severity: "critical",
+          message: `Route this change to ${conflict.relativePath}; do not create or update a Workshop duplicate.`,
+        },
+      ],
+    };
   });
 
   api.on("agent_end", async (event, ctx) => {
