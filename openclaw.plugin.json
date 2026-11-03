@@ -1,9 +1,8 @@
 {
   "id": "workshop-governance-context",
   "name": "Workshop Governance Context",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Loads lifecycle governance, blocks workspace-owner conflicts, and records autonomous Workshop changes with Git provenance.",
-  "categories": ["developer-tools"],
   "activation": {
     "onStartup": true,
     "onCapabilities": ["hook"]

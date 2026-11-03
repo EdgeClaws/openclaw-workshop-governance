@@ -271,7 +271,7 @@ test("manifest declares hook startup, provenance, and registry configuration", a
       "utf8",
     ),
   );
-  assert.equal(manifest.version, "0.4.1");
+  assert.equal(manifest.version, "0.4.2");
   assert.equal(manifest.activation.onStartup, true);
   assert.deepEqual(manifest.activation.onCapabilities, ["hook"]);
   assert.equal(
