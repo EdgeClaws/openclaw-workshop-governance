@@ -7,9 +7,11 @@ compact index of current repository/workspace skills. It does not contain a
 second copy of policy and does not run a second review pass. When
 `autoCommitProvenance` is enabled, it also blocks dirty starting trees and
 commits successful direct-auto maintenance with Git provenance.
-Its static proposal evaluator blocks any Workshop target whose name or path is
-already owned by a workspace skill, so repository/workspace ownership wins even
-if model guidance is missed.
+OpenClaw 2026.11 removed proposal evaluation hooks. The plugin now observes
+committed Workshop writes and emits a high-signal error when a Workshop target
+duplicates a workspace-owned skill. The injected governance remains the
+pre-write protection; conflicting writes must be restored or archived through
+Workshop's version history.
 
 The editable upstream is this repository. The
 `openclaw-skill-plugin-lifecycle` skill also carries a checksum-verified
@@ -27,7 +29,7 @@ governed by normal skill routing.
 
 ## Install
 
-Requires OpenClaw 2026.9.4 or later and a host-supported Node release
+Requires OpenClaw 2026.11.3 or later and a host-supported Node release
 (24.16+ or 26.1+).
 
 1. Keep this checkout in a durable directory outside the OpenClaw install.
@@ -89,5 +91,5 @@ npm pack --dry-run
 
 Tests cover experience reviews in both modes, weekly cron identification,
 non-Workshop isolation, combined and split registry discovery, explicit
-overrides, dynamic policy loading, workspace-owner collision blocking, Git
+overrides, dynamic policy loading, post-write workspace-owner collision audit, Git
 provenance, and owner-only fallback behavior.

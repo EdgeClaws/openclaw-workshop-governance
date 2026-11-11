@@ -109,7 +109,14 @@ export function registerWorkshopGovernance(api) {
     return { outcome: "pass" };
   });
 
-  api.on("skill_proposal_evaluate", async (event, ctx) => {
+  api.on("skill_changed", async (event, ctx) => {
+    if (
+      event.source !== "workshop" ||
+      event.action === "removed" ||
+      !event.after
+    ) {
+      return;
+    }
     const workspaceDir = resolveGovernanceWorkspace({
       pluginConfig: api.pluginConfig,
       openclawConfig: api.config,
@@ -123,30 +130,14 @@ export function registerWorkshopGovernance(api) {
     const owners = await listWorkspaceSkillOwners(workspaceDir, lifecyclePath);
     const conflict = owners.find(
       (owner) =>
-        owner.name === event.skill.name ||
-        owner.relativePath === `skills/${event.skill.skillKey}/SKILL.md`,
+        owner.name === event.after.name ||
+        owner.relativePath === `skills/${event.after.skillKey}/SKILL.md`,
     );
-    if (!conflict) {
-      return {
-        evaluatorVersion: "1",
-        mode: "static-ownership",
-        decision: "pass",
-        summary: "No workspace-owned skill conflicts with this Workshop target.",
-      };
-    }
-    return {
-      evaluatorVersion: "1",
-      mode: "static-ownership",
-      decision: "block",
-      decisionReason: `Workspace owner already exists at ${conflict.relativePath}.`,
-      findings: [
-        {
-          ruleId: "workspace-owner-conflict",
-          severity: "critical",
-          message: `Route this change to ${conflict.relativePath}; do not create or update a Workshop duplicate.`,
-        },
-      ],
-    };
+    if (!conflict) return;
+    api.logger.error(
+      `Workshop wrote conflicting skill ${event.after.skillKey}; workspace owner exists at ${conflict.relativePath}. ` +
+        "The 2026.11 Workshop API has no pre-apply evaluation hook; restore/archive the Workshop copy and route the change to the workspace owner.",
+    );
   });
 
   api.on("agent_end", async (event, ctx) => {

@@ -92,8 +92,15 @@ async function fixtureWorkspace({ layout = "combined" } = {}) {
 
 function fakeApi(workspaceDir, pluginConfig = {}) {
   const hooks = new Map();
+  const logs = { error: [] };
   return {
     hooks,
+    logs,
+    logger: {
+      error(message) {
+        logs.error.push(message);
+      },
+    },
     pluginConfig,
     config: {
       agents: {
@@ -271,7 +278,7 @@ test("manifest declares hook startup, provenance, and registry configuration", a
       "utf8",
     ),
   );
-  assert.equal(manifest.version, "0.4.2");
+  assert.equal(manifest.version, "0.5.0");
   assert.equal(manifest.activation.onStartup, true);
   assert.deepEqual(manifest.activation.onCapabilities, ["hook"]);
   assert.equal(
@@ -288,49 +295,57 @@ test("manifest declares hook startup, provenance, and registry configuration", a
   );
 });
 
-test("static evaluator blocks Workshop duplicates of workspace owners", async (t) => {
+test("post-write audit reports Workshop duplicates of workspace owners", async (t) => {
   const workspaceDir = await fixtureWorkspace();
   t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
   const api = fakeApi(workspaceDir);
   registerWorkshopGovernance(api);
-  const evaluator = api.hooks.get("skill_proposal_evaluate");
-  const result = await evaluator(
+  const observer = api.hooks.get("skill_changed");
+  await observer(
     {
-      proposal: { id: "p1", kind: "update", revision: "v1", revisionSha256: "a" },
-      skill: {
+      source: "workshop",
+      action: "created",
+      occurredAt: new Date().toISOString(),
+      after: {
         name: "qa-device-control",
         skillKey: "qa-device-control",
         description: "duplicate",
+        skillFile: "SKILL.md",
+        skillDir: "qa-device-control",
+        source: "workshop",
+        revision: { contentSha256: "a", treeSha256: "a" },
       },
-      candidate: { skillMd: {}, files: [], treeSha256: "a" },
-      reason: "apply",
     },
     { workspaceDir },
   );
-  assert.equal(result.decision, "block");
-  assert.match(result.decisionReason, /qa-device-control/);
-  assert.equal(result.findings[0].ruleId, "workspace-owner-conflict");
+  assert.equal(api.logs.error.length, 1);
+  assert.match(api.logs.error[0], /qa-device-control/);
+  assert.match(api.logs.error[0], /workspace owner exists/);
 });
 
-test("static evaluator passes a Workshop-owned target", async (t) => {
+test("post-write audit ignores Workshop-owned targets", async (t) => {
   const workspaceDir = await fixtureWorkspace();
   t.after(() => fs.rm(workspaceDir, { recursive: true, force: true }));
   const api = fakeApi(workspaceDir);
   registerWorkshopGovernance(api);
-  const result = await api.hooks.get("skill_proposal_evaluate")(
+  await api.hooks.get("skill_changed")(
     {
-      proposal: { id: "p2", kind: "update", revision: "v1", revisionSha256: "b" },
-      skill: {
+      source: "workshop",
+      action: "updated",
+      occurredAt: new Date().toISOString(),
+      after: {
         name: "campaign-claims-review",
         skillKey: "campaign-claims-review",
         description: "Workshop owned",
+        skillFile: "SKILL.md",
+        skillDir: "campaign-claims-review",
+        source: "workshop",
+        revision: { contentSha256: "b", treeSha256: "b" },
       },
-      candidate: { skillMd: {}, files: [], treeSha256: "b" },
-      reason: "apply",
     },
     { workspaceDir },
   );
-  assert.equal(result.decision, "pass");
+  assert.deepEqual(api.logs.error, []);
 });
 
 test("commits successful autonomous edits with provenance", async (t) => {
